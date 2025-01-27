@@ -23,9 +23,9 @@ So while it doesn't currently cover every endpoint (for example you cannot delet
 ## Usage
 
 ```python
-from sncloud import SncloudClient
+from sncloud import SNClient
 
-client = SncloudClient()
+client = SNClient()
 client.login("test@example.com", "1234") # login with email and password
 files = client.ls() # returns a list of the files/directories on the Supernote
 print(files)

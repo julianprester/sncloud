@@ -45,7 +45,7 @@ def calc_md5(data: Union[str, bytes]) -> str:
         raise TypeError("Input must be string or bytes")
 
 
-class SncloudClient:
+class SNClient:
     BASE_URL = "https://cloud.supernote.com/api"
 
     def __init__(self):
