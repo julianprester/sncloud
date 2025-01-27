@@ -2,7 +2,7 @@
 
 Unofficial Python API client that allows you to access your Supernote files through the Supernote Cloud.
 
-`snapi` is intended for integrating your Supernote Cloud files into other apps. Yes, there are other cloud providers integrated into the Supernote which are easier to develop for, but only the Supernote Cloud offer "auto sync" at the moment. The Supernote APIs are extensive but this library only covers the subset that most developers will need for common filesystem actions such as list, download and upload files.
+`sncloud` is intended for integrating your Supernote Cloud files into other apps. Yes, there are other cloud providers integrated into the Supernote which are easier to develop for, but only the Supernote Cloud offer "auto sync" at the moment. The Supernote APIs are extensive but this library only covers the subset that most developers will need for common filesystem actions such as list, download and upload files.
 
 So while it doesn't currently cover every endpoint (for example you cannot delete, move or rename files) it will likely work for you. That said, PRs are weclome.
 
@@ -18,14 +18,14 @@ So while it doesn't currently cover every endpoint (for example you cannot delet
 
 ## Installation
 
-`pip install snapi`
+`pip install sncloud`
 
 ## Usage
 
 ```python
-from snapi import SnapiClient
+from sncloud import SncloudClient
 
-client = SnapiClient()
+client = SncloudClient()
 client.login("test@example.com", "1234") # login with email and password
 files = client.ls() # returns a list of the files/directories on the Supernote
 print(files)
