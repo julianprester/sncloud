@@ -1,6 +1,6 @@
 [project]
 name = "sncloud"
-version = "0.1.0"
+version = "0.1.2"
 description = "Unofficial Python API client that allows you to access your Supernote files through the Supernote Cloud"
 readme = "README.md"
 authors = [
