@@ -29,7 +29,7 @@ client = SNClient()
 client.login("test@example.com", "1234") # login with email and password
 files = client.ls() # returns a list of the files/directories on the Supernote
 print(files)
-client.get(1) # downloads the file with the given id
+client.get("/Note/notes.note") # downloads the file with the given path
 ```
 
 ## Roadmap
