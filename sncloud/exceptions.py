@@ -3,3 +3,6 @@ class ApiError(Exception):
 
 class AuthenticationError(ApiError):
     pass
+
+class FileFolderNotFound(ApiError):
+    pass

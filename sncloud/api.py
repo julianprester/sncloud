@@ -7,7 +7,7 @@ from hashlib import sha256, md5
 
 from sncloud.models import File, Directory
 from sncloud import endpoints
-from sncloud.exceptions import ApiError, AuthenticationError
+from sncloud.exceptions import ApiError, AuthenticationError, FileFolderNotFound
 
 __version__ = "0.1.0"
 
@@ -135,13 +135,13 @@ class SNClient:
         self._access_token = data["token"]
         return data["token"]
 
-    def ls(self, directory: Union[int, Directory] = 0) -> List[Union[File, Directory]]:
+    def ls(self, directory: Union[int, str, Directory] = 0) -> List[Union[File, Directory]]:
         """
         List files and folders in the specified directory.
         If no directory specified, lists root directory.
 
         Args:
-            id: Directory id (optional)
+            directory: Directory id, path, or object (optional)
 
         Returns:
             List of File and Directory objects
@@ -151,6 +151,22 @@ class SNClient:
         """
         if not self._access_token:
             raise AuthenticationError("Must be authenticated to list files")
+
+        if isinstance(directory, str):
+            directory_path = Path(directory)
+            directory_path_parts = directory_path.parts[1:]
+            root = self.ls()
+            for part in directory_path_parts:
+                found = False
+                for item in root:
+                    if item.file_name == part and isinstance(item, Directory):
+                        directory = item
+                        root = self.ls(directory)
+                        found = True
+                        break
+                if not found:
+                    raise FileFolderNotFound(f"Directory not found: {part} in {directory_path.parent.as_posix()}")
+            return root
 
         payload = {
             "directoryId": directory.id
