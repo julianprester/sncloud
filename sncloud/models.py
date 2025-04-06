@@ -1,10 +1,10 @@
 from typing import Annotated, Literal
 from pydantic import BaseModel, Field, BeforeValidator
-from datetime import datetime
+from datetime import datetime, timezone
 
 def convert_timestamp(epoch: int) -> datetime:
     """Convert millisecond timestamp to datetime"""
-    return datetime.fromtimestamp(epoch / 1000)
+    return datetime.fromtimestamp(epoch / 1000).astimezone(timezone.utc)
 
 class CloudItem(BaseModel):
     id: int
