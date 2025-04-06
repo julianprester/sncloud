@@ -184,12 +184,12 @@ class SNClient:
             for item in data["userFileVOList"]
         ]
 
-    def get(self, item: Union[int, File], path: Path = Path(".")) -> str:
+    def get(self, item: Union[str, File], path: Path = Path(".")) -> str:
         """
-        Download a single file by its ID.
+        Download a single file.
 
         Args:
-            item: file or file id to download
+            item: file path or object to download
 
         Returns:
             str: Path where file was saved
@@ -200,8 +200,31 @@ class SNClient:
         """
         if not self._access_token:
             raise AuthenticationError("Must be authenticated to download files")
+        
+        if isinstance(item, str):
+            item_path = Path(item)
+            directory_path_parts = item_path.parts[1:-1]
+            file_path_parts = item_path.parts[-1]
+            root = self.ls()
+            for part in directory_path_parts:
+                found = False
+                for sub_directory in root:
+                    if sub_directory.file_name == part and isinstance(sub_directory, Directory):
+                        root = self.ls(sub_directory)
+                        found = True
+                        break
+                if not found:
+                    raise FileFolderNotFound(f"File not found: {file_path_parts} in {item_path.parent.as_posix()}")
+            found = False
+            for file in root:
+                if file.file_name == file_path_parts and isinstance(file, File):
+                    item = file
+                    found = True
+                    break
+            if not found:
+                raise FileFolderNotFound(f"File not found: {file_path_parts} in {item_path.parent.as_posix()}")
 
-        payload = {"id": item.id if isinstance(item, File) else item, "type": 0}
+        payload = {"id": item.id, "type": 0}
 
         data = self._api_call(endpoints.get, payload)
         if not data["success"]:
