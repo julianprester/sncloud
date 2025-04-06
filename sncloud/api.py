@@ -49,7 +49,7 @@ class SNClient:
     BASE_URL = "https://cloud.supernote.com/api"
 
     def __init__(self):
-        self._client = httpx.Client()
+        self._client = httpx.Client(timeout=60)
         self._access_token: Optional[str] = None
 
     def _api_call(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -135,6 +135,49 @@ class SNClient:
         self._access_token = data["token"]
         return data["token"]
 
+    def _get_item(self, item: Union[str, File, Directory]) -> Union[File, Directory]:
+        """
+        Get the item by its path or object.
+
+        Args:
+            item: File or Directory object or path
+        Returns:
+            File or Directory object
+        Raises:
+            FileFolderNotFound: If the item is not found
+        """
+
+        if isinstance(item, str):
+            item_path = Path(item)
+            is_file = False
+            if "." in item_path.parts[-1]:
+                is_file = True
+                directory_path_parts = item_path.parts[1:-1]
+                file_path_parts = item_path.parts[-1]
+            else:
+                directory_path_parts = item_path.parts[1:]
+            root = self.ls()
+            for part in directory_path_parts:
+                found = False
+                for sub_directory in root:
+                    if sub_directory.file_name == part and isinstance(sub_directory, Directory):
+                        root = sub_directory
+                        found = True
+                        break
+                if not found:
+                    raise FileFolderNotFound(f"Folder not found: {part} in {item_path.parent.as_posix()}")
+            if not is_file:
+                return root
+            found = False
+            for file in self.ls(root):
+                if file.file_name == file_path_parts and isinstance(file, File):
+                    item = file
+                    found = True
+                    break
+            if not found:
+                raise FileFolderNotFound(f"File not found: {file_path_parts} in {item_path.parent.as_posix()}")
+        return item
+
     def ls(self, directory: Union[int, str, Directory] = 0) -> List[Union[File, Directory]]:
         """
         List files and folders in the specified directory.
@@ -152,26 +195,11 @@ class SNClient:
         if not self._access_token:
             raise AuthenticationError("Must be authenticated to list files")
 
-        if isinstance(directory, str):
-            directory_path = Path(directory)
-            directory_path_parts = directory_path.parts[1:]
-            root = self.ls()
-            for part in directory_path_parts:
-                found = False
-                for item in root:
-                    if item.file_name == part and isinstance(item, Directory):
-                        directory = item
-                        root = self.ls(directory)
-                        found = True
-                        break
-                if not found:
-                    raise FileFolderNotFound(f"Directory not found: {part} in {directory_path.parent.as_posix()}")
-            return root
+        if directory != 0 and directory != "/":
+            directory = self._get_item(directory)
 
         payload = {
-            "directoryId": directory.id
-            if isinstance(directory, Directory)
-            else directory,
+            "directoryId": 0 if (directory == 0 or directory == "/") else directory.id,
             "pageNo": 1,
             "pageSize": 100,
             "order": "time",
@@ -201,28 +229,7 @@ class SNClient:
         if not self._access_token:
             raise AuthenticationError("Must be authenticated to download files")
         
-        if isinstance(item, str):
-            item_path = Path(item)
-            directory_path_parts = item_path.parts[1:-1]
-            file_path_parts = item_path.parts[-1]
-            root = self.ls()
-            for part in directory_path_parts:
-                found = False
-                for sub_directory in root:
-                    if sub_directory.file_name == part and isinstance(sub_directory, Directory):
-                        root = self.ls(sub_directory)
-                        found = True
-                        break
-                if not found:
-                    raise FileFolderNotFound(f"File not found: {file_path_parts} in {item_path.parent.as_posix()}")
-            found = False
-            for file in root:
-                if file.file_name == file_path_parts and isinstance(file, File):
-                    item = file
-                    found = True
-                    break
-            if not found:
-                raise FileFolderNotFound(f"File not found: {file_path_parts} in {item_path.parent.as_posix()}")
+        item = self._get_item(item)
 
         payload = {"id": item.id, "type": 0}
 
@@ -238,13 +245,13 @@ class SNClient:
         return path / Path(item.file_name)
 
     def get_pdf(
-        self, item: File, path: Path = Path("."), page_numbers: List[int] = []
+        self, item: Union[str, File], path: Path = Path("."), page_numbers: List[int] = []
     ) -> str:
         """
         Download a single note file as a PDF.
 
         Args:
-            id: ID of the file to convert to PDF and download
+            item: file path or object of the file to convert to PDF and download
             page_numbers: List of page numbers to include
 
         Returns:
@@ -256,6 +263,8 @@ class SNClient:
         """
         if not self._access_token:
             raise AuthenticationError("Must be authenticated to download files")
+
+        item = self._get_item(item)
 
         payload = {"id": item.id, "pageNoList": page_numbers}
 
@@ -271,7 +280,7 @@ class SNClient:
         return path / Path(item.file_name)
 
     def get_png(
-        self, item: File, path: Path = Path("."), page_numbers: List[int] = []
+        self, item: Union[str, File], path: Path = Path("."), page_numbers: List[int] = []
     ) -> List[str]:
         """
         Download a single note file as pngs.
@@ -290,6 +299,8 @@ class SNClient:
         if not self._access_token:
             raise AuthenticationError("Must be authenticated to download files")
 
+        item = self._get_item(item)
+
         payload = {"id": item.id}
 
         data = self._api_call(endpoints.get_png, payload)
@@ -307,7 +318,7 @@ class SNClient:
 
         return path / Path(item.file_name + ".png")
 
-    def mkdir(self, parent: Union[int, Directory], folder_name: str) -> str:
+    def mkdir(self, parent: Union[str, Directory], folder_name: str) -> str:
         """Create a new folder in the parent directory.
 
         Args:
@@ -324,8 +335,11 @@ class SNClient:
         if not self._access_token:
             raise AuthenticationError("Must be authenticated to download files")
 
+        if parent != "/":
+            parent = self._get_item(parent)
+
         payload = {
-            "directoryId": parent.id if isinstance(parent, Directory) else parent,
+            "directoryId": parent.id if parent != "/" else 0,
             "fileName": folder_name,
         }
 
@@ -335,7 +349,7 @@ class SNClient:
 
         return folder_name
 
-    def put(self, file_path: Path, parent: Union[int, Directory] = 0) -> str:
+    def put(self, file_path: Path, parent: Union[str, Directory] = "/") -> str:
         """Upload a file to the parent directory.
 
         Args:
@@ -360,8 +374,11 @@ class SNClient:
             file_data = f.read()
             data_md5 = calc_md5(file_data)
 
+        if parent != "/":
+            parent = self._get_item(parent)
+
         payload = {
-            "directoryId": parent.id if isinstance(parent, Directory) else parent,
+            "directoryId": parent.id if parent != "/" else 0,
             "fileName": file_path.name,
             "md5": data_md5,
             "size": len(file_data),
