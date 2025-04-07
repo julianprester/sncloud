@@ -22,6 +22,8 @@ So while it doesn't currently cover every endpoint (for example you cannot delet
 
 ## Usage
 
+### Python API
+
 ```python
 from sncloud import SNClient
 
@@ -31,6 +33,44 @@ files = client.ls() # returns a list of the files/directories on the Supernote
 print(files)
 client.get("/Note/notes.note") # downloads the file with the given path
 ```
+
+### Command Line Interface
+
+The package also provides a command line interface:
+
+```bash
+# Login to your Supernote Cloud account
+sncloud login
+
+# List files in the root directory
+sncloud ls
+
+# List files in a specific directory
+sncloud ls /Notes
+
+# Download a file
+sncloud get /Notes/document.note
+
+# Download a note as PDF
+sncloud get /Notes/document.note --pdf
+
+# Download a note as PNG
+sncloud get /Notes/document.note --png
+
+# Download specific pages (works with both PDF and PNG)
+sncloud get /Notes/document.note --pdf --pages "1,3,5"
+
+# Set output directory
+sncloud get /Notes/document.note --output /path/to/directory
+
+# Create a new folder
+sncloud mkdir NewFolder --parent /Notes
+
+# Upload a file
+sncloud put /path/to/file.txt --parent /Notes
+```
+
+The CLI will store your access token in `~/.config/sncloud/config.json` and automatically refresh it when needed.
 
 ## Roadmap
 
