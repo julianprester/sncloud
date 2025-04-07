@@ -6,7 +6,7 @@ __author__ = 'Julian Prester <hi@julianprester.com>'
 __version__ = api.__version__
 
 __all__ = [
-    Directory,
-    File,
-    SNClient
+    "Directory",
+    "File",
+    "SNClient"
 ]
