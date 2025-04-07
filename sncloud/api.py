@@ -135,6 +135,38 @@ class SNClient:
         self._access_token = data["token"]
         return data["token"]
 
+    def _get_directory_id(self, directory: Union[None, int, str, Directory] = None) -> int:
+        """
+        Convert various directory representations to a directory ID.
+        
+        Args:
+            directory: Directory path, object, ID, or None/0/"/" for root
+            
+        Returns:
+            int: Directory ID (0 for root)
+            
+        Raises:
+            ValueError: If directory is an invalid type
+            FileFolderNotFound: If directory path doesn't exist
+        """
+        # Handle root directory cases
+        if directory is None or directory == 0 or directory == "/":
+            return 0
+            
+        # Convert string paths to Directory objects
+        if isinstance(directory, str):
+            directory = self._get_item(directory)
+            
+        # Extract ID from Directory object
+        if isinstance(directory, Directory):
+            return directory.id
+            
+        # Handle direct integer IDs
+        if isinstance(directory, int):
+            return directory
+            
+        raise ValueError(f"Invalid directory type: {type(directory)}")
+
     def _get_item(self, item: Union[str, File, Directory]) -> Union[File, Directory]:
         """
         Get the item by its path or object.
@@ -145,61 +177,91 @@ class SNClient:
             File or Directory object
         Raises:
             FileFolderNotFound: If the item is not found
+            TypeError: If item is an invalid type
         """
-
+        # Return the item directly if it's already a File or Directory object
+        if isinstance(item, (File, Directory)):
+            return item
+            
         if isinstance(item, str):
+            # Handle root directory case
+            if item == "/":
+                # Return first item's parent from root directory
+                # This is a workaround since we don't have a direct way to get root directory
+                items = self.ls()
+                if items:
+                    return items[0].parent
+                return Directory(id=0, file_name="/", parent_id=None)  # Fallback
+                
+            # Process path string
             item_path = Path(item)
-            is_file = False
-            if "." in item_path.parts[-1]:
-                is_file = True
-                directory_path_parts = item_path.parts[1:-1]
-                file_path_parts = item_path.parts[-1]
-            else:
-                directory_path_parts = item_path.parts[1:]
-            root = self.ls()
-            for part in directory_path_parts:
+            parts = item_path.parts
+            
+            # Handle absolute vs relative paths
+            if parts and parts[0] == "/":
+                parts = parts[1:]  # Remove leading slash for absolute paths
+                
+            # Empty path or just "/" returns root directory
+            if not parts:
+                return Directory(id=0, file_name="/", parent_id=None)  # Root directory
+                
+            # Check if the last part has an extension to determine if it's a file
+            is_file = "." in parts[-1] if parts else False
+            dir_parts = parts[:-1] if is_file else parts
+            
+            # Navigate through directories
+            current_dir = None  # Start at root
+            current_items = self.ls(current_dir)
+            
+            for i, part in enumerate(dir_parts):
                 found = False
-                for sub_directory in root:
-                    if sub_directory.file_name == part and isinstance(sub_directory, Directory):
-                        root = sub_directory
+                
+                for item in current_items:
+                    if item.file_name == part and isinstance(item, Directory):
+                        current_dir = item
                         found = True
+                        current_items = self.ls(current_dir)
                         break
+                        
                 if not found:
-                    raise FileFolderNotFound(f"Folder not found: {part} in {item_path.parent.as_posix()}")
-            if not is_file:
-                return root
-            found = False
-            for file in self.ls(root):
-                if file.file_name == file_path_parts and isinstance(file, File):
-                    item = file
-                    found = True
-                    break
-            if not found:
-                raise FileFolderNotFound(f"File not found: {file_path_parts} in {item_path.parent.as_posix()}")
-        return item
+                    path_so_far = "/" + "/".join(parts[:i+1])
+                    raise FileFolderNotFound(f"Directory not found: {part} in {path_so_far}")
+                    
+            # If we're looking for a file, find it in the final directory
+            if is_file:
+                for item in current_items:
+                    if item.file_name == parts[-1]:
+                        return item
+                raise FileFolderNotFound(f"File not found: {parts[-1]} in /{'/'.join(dir_parts)}")
+            
+            # Return the directory we found
+            return current_dir
+        
+        # If we get here, item is of an unsupported type
+        raise TypeError(f"Expected string path or File/Directory object, got {type(item)}")
 
-    def ls(self, directory: Union[int, str, Directory] = 0) -> List[Union[File, Directory]]:
+    def ls(self, directory: Union[None, int, str, Directory] = None) -> List[Union[File, Directory]]:
         """
         List files and folders in the specified directory.
         If no directory specified, lists root directory.
 
         Args:
-            directory: Directory id, path, or object (optional)
+            directory: Directory ID, path, Directory object, or None for root
 
         Returns:
             List of File and Directory objects
 
         Raises:
             AuthenticationError: If not authenticated
+            FileFolderNotFound: If directory doesn't exist
         """
         if not self._access_token:
             raise AuthenticationError("Must be authenticated to list files")
 
-        if directory != 0 and directory != "/":
-            directory = self._get_item(directory)
-
+        dir_id = self._get_directory_id(directory)
+        
         payload = {
-            "directoryId": 0 if (directory == 0 or directory == "/") else directory.id,
+            "directoryId": dir_id,
             "pageNo": 1,
             "pageSize": 100,
             "order": "time",
@@ -318,12 +380,12 @@ class SNClient:
 
         return path / Path(item.file_name + ".png")
 
-    def mkdir(self, parent: Union[str, Directory], folder_name: str) -> str:
+    def mkdir(self, folder_name: str, parent: Union[None, str, Directory] = None) -> str:
         """Create a new folder in the parent directory.
 
         Args:
-            parent: Parent directory id
             folder_name: Name of the folder to create
+            parent: Parent directory path, object, or None for root
 
         Returns:
             str: Name of created folder
@@ -333,13 +395,12 @@ class SNClient:
             ApiError: If folder creation fails
         """
         if not self._access_token:
-            raise AuthenticationError("Must be authenticated to download files")
+            raise AuthenticationError("Must be authenticated to create folders")
 
-        if parent != "/":
-            parent = self._get_item(parent)
-
+        dir_id = self._get_directory_id(parent)
+        
         payload = {
-            "directoryId": parent.id if parent != "/" else 0,
+            "directoryId": dir_id,
             "fileName": folder_name,
         }
 
@@ -349,12 +410,12 @@ class SNClient:
 
         return folder_name
 
-    def put(self, file_path: Path, parent: Union[str, Directory] = "/") -> str:
+    def put(self, file_path: Path, parent: Union[None, str, Directory] = None) -> str:
         """Upload a file to the parent directory.
 
         Args:
             file_path: Path to the file to upload
-            parent: Parent directory id
+            parent: Parent directory path, object, or None for root
 
         Returns:
             str: Name of uploaded file
@@ -365,7 +426,7 @@ class SNClient:
             ApiError: If file upload fails
         """
         if not self._access_token:
-            raise AuthenticationError("Must be authenticated to download files")
+            raise AuthenticationError("Must be authenticated to upload files")
         
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -374,11 +435,10 @@ class SNClient:
             file_data = f.read()
             data_md5 = calc_md5(file_data)
 
-        if parent != "/":
-            parent = self._get_item(parent)
+        dir_id = self._get_directory_id(parent)
 
         payload = {
-            "directoryId": parent.id if parent != "/" else 0,
+            "directoryId": dir_id,
             "fileName": file_path.name,
             "md5": data_md5,
             "size": len(file_data),
@@ -398,7 +458,7 @@ class SNClient:
             raise ApiError(data.text)
         inner_name = os.path.basename(data["url"])
         payload = {
-            "directoryId": parent.id if isinstance(parent, Directory) else parent,
+            "directoryId": dir_id,
             "fileName": file_path.name,
             "fileSize": len(file_data),
             "innerName": inner_name,
