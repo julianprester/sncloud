@@ -74,10 +74,10 @@ The CLI will store your access token in `~/.config/sncloud/config.json` and auto
 
 ## Roadmap
 
+- [x] CLI/SHELL script
 - [ ] Example scripts
 - [ ] Advanced API calls
 - [ ] Get Supernote Cloud API complete
-- [ ] CLI/SHELL script
 - [ ] Docker container
 
 ## Want to contribute?
