@@ -2,11 +2,10 @@ import click
 import json
 import os
 from pathlib import Path
-from datetime import datetime, timedelta
 from typing import List, Optional
 
 from sncloud.api import SNClient
-from sncloud.exceptions import AuthenticationError
+from sncloud.exceptions import AuthenticationError, ApiError
 
 CONFIG_DIR = Path.home() / ".config" / "sncloud"
 CONFIG_PATH = CONFIG_DIR / "config.json"
@@ -39,16 +38,18 @@ def get_client():
     
     config = load_config()
     token = config.get("access_token")
-    expires_at = config.get("expires_at")
     
-    # Check if token exists and is not expired
-    if token and expires_at:
-        expires_at_dt = datetime.fromisoformat(expires_at)
-        if datetime.now() < expires_at_dt:
-            client._access_token = token
+    if token:
+        client._access_token = token
+        # Validate token by making a quick ls call
+        try:
+            client.ls()
             return client
+        except (AuthenticationError, ApiError):
+            # Token is invalid or expired
+            pass
     
-    # Token doesn't exist or is expired, prompt for login
+    # Token doesn't exist or is invalid
     click.echo("Authentication required. Please login.")
     return None
 
@@ -64,10 +65,9 @@ def ensure_authenticated(client):
         
         try:
             token = client.login(email, password)
-            # Save token with expiration (30 days)
+            # Save token
             config = {
-                "access_token": token,
-                "expires_at": (datetime.now() + timedelta(days=30)).isoformat()
+                "access_token": token
             }
             save_config(config)
         except AuthenticationError as e:
@@ -94,8 +94,7 @@ def login():
     try:
         token = client.login(email, password)
         config = {
-            "access_token": token,
-            "expires_at": (datetime.now() + timedelta(days=30)).isoformat()
+            "access_token": token
         }
         save_config(config)
         click.echo("Login successful")
