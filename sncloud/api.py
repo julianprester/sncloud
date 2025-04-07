@@ -198,7 +198,7 @@ class SNClient:
             parts = item_path.parts
             
             # Handle absolute vs relative paths
-            if parts and parts[0] == "/":
+            if parts and (parts[0] == "/" or parts[0] == "\\"):
                 parts = parts[1:]  # Remove leading slash for absolute paths
                 
             # Empty path or just "/" returns root directory
