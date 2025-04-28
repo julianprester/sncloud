@@ -190,5 +190,20 @@ def put(file_path: str, parent: Optional[str] = None):
         exit(1)
 
 
+@cli.command()
+@click.argument("file_path", type=click.Path(), nargs=-1)
+def rm(file_path):
+    """Delete a file from Supernote Cloud."""
+    client = get_client()
+    client = ensure_authenticated(client)
+    
+    try:
+        result = client.delete(list(file_path))
+        click.echo(f"Deleted file: {result}")
+    except Exception as e:
+        click.echo(f"Error: {str(e)}")
+        exit(1)
+
+
 if __name__ == "__main__":
     cli()

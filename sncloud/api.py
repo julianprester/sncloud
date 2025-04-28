@@ -465,3 +465,39 @@ class SNClient:
             "md5": data_md5,
         }
         self._api_call(endpoints.upload_finish, payload)
+
+    def delete(self, item: Union[str, File, Directory, list[Union[str, File, Directory]]]) -> list[str]:
+        """Delete a file or list of files.
+
+        Args:
+            item: file or list of files to be deleted
+
+        Returns:
+            str: Name(s) of deleted file(s)
+
+        Raises:
+            AuthenticationError: If not authenticated
+            FileNotFoundError: If file not found
+            ApiError: If file upload fails
+        """
+        if not self._access_token:
+            raise AuthenticationError("Must be authenticated to upload files")
+        
+        if isinstance(item, list):
+            to_delete = [self._get_item(i) for i in item]
+            dir_id = to_delete[0].directory_id
+            for i in to_delete:
+                if i.directory_id != dir_id:
+                    raise FileFolderNotFound(f"Files are not in the same directory: {i.file_name}")
+        else:
+            to_delete = [self._get_item(item)]
+
+        payload = {
+            "directoryId": to_delete[0].directory_id,
+            "idList": [i.id for i in to_delete]
+        }
+        data = self._api_call(endpoints.delete, payload)
+        if not data["success"]:
+            raise ApiError(data["errorMsg"])
+
+        return ", ".join([i.file_name for i in to_delete])
